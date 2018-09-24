@@ -36,23 +36,19 @@ object Machines {
   // TODO: How can we handle state better?
   // TODO: Is there a race condition in the state?
 
-  val updateMachineStep1 = (
+  val updateMachine = (
     for {
-      machine <- each[Machine]
-      _       <- byId[MachineIntent](machine.name).filter(_.machine != machine)
-      _       <- noneFound[state.UpdatingMachine]
-    } yield machine
-  ).react { machine =>
-    put(state.UpdatingMachine(machine.name))
-  }
+      machine       <- each[Machine]
+      _             <- byId[MachineIntent](machine.name).filter(_.machine != machine)
+      updatingState <- getOpt[state.UpdatingMachine]
+    } yield (machine, updatingState)
+  ).reactPartial {
+    case (machine, None) =>
+      put(state.UpdatingMachine(machine.name))
 
-  val updateMachineStep2 = (
-    for {
-      machine <- each[Machine]
-      _       <- byId[MachineIntent](machine.name).filter(_.machine != machine)
-      _       <- get[state.UpdatingMachine].filter(_.name == machine.name)
-    } yield machine
-  ).react(delete)
+    case (machine, Some(state.UpdatingMachine(updatingMachineName))) if machine.name == updatingMachineName =>
+      delete(machine)
+  }
 
   val clearUpdatingMachineState = (
     for {

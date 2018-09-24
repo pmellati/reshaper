@@ -39,6 +39,9 @@ object Observe {
   def get[A]: Observe[A] =
     all[A].filter(_.size == 1).map(_.head)
 
+  def getOpt[A]: Observe[Option[A]] =
+    all[A].filter(_.size <= 1).map(_.headOption)
+
   def noneFound[A]: Observe[Unit] =
     all[A].filter(_.isEmpty).void
 
