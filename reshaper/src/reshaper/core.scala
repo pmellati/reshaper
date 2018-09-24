@@ -7,24 +7,56 @@ import cats.Monad
 trait Resource
 
 
-sealed trait Observe[A]
+sealed trait Observe[+A]
 
 object Observe {
   implicit val observeMonad: Monad[Observe] = ???
 
-  implicit class ObserveSyntax[A](observe: Observe[A]) {
-    def react(f: A => Effect): Reaction[A] =
-      Reaction[A](observe)(f)
+  implicit class ObserveSyntax[A](self: Observe[A]) {
+    def react(f: A => Effect): Reaction =
+      Reaction[A](self)(f)
+
+    def reactPartial(pf: PartialFunction[A, Effect]): Reaction =
+      Reaction[A](self.filter(pf.isDefinedAt))(pf)
+
+    def filter(pred: A => Boolean): Observe[A] =
+      self.flatMap { a =>
+        if(pred(a)) pure(a)
+        else        cancel
+      }
+
+    def void: Observe[Unit] =
+      self >> unit
   }
 
-  def each[A]: Observe[A] = ???
-  def find[A](pred: A => Boolean): Observe[Option[A]] = ???
+  def pure[A](a: A): Observe[A] = ???
+  val cancel: Observe[Nothing] = ???
 
-  def ifNotExists[A](pred: A => Boolean): Observe[Unit] =
-    find(pred) >>= { optA =>
-      if(optA.isDefined) Monad[Observe].unit
-      else               ???
+  def each[A]: Observe[A] = ???
+  def all[A]: Observe[Set[A]] = ???
+
+  // TODO: What the hell is this?
+  def get[A]: Observe[A] =
+    all[A].filter(_.size == 1).map(_.head)
+
+  def noneFound[A]: Observe[Unit] =
+    all[A].filter(_.isEmpty).void
+
+  def byIdOpt[A](id: String): Observe[Option[A]] = ???
+
+  val unit: Observe[Unit] = pure[Unit](())
+
+  def byId[A](id: String): Observe[A] =
+    byIdOpt[A](id).flatMap {
+      case Some(a) => pure(a)
+      case None    => cancel
     }
+
+  def byIdNotFound[A](id: String): Observe[Unit] =
+    byIdOpt[A](id).filter(_.isEmpty).void
+
+  def continueIf(cond: Boolean): Observe[Unit] =
+    unit.filter(_ => cond)
 }
 
 
@@ -37,8 +69,8 @@ object Effect {
 }
 
 
-sealed trait Reaction[A]
+sealed trait Reaction
 
 object Reaction {
-  def apply[O](o: Observe[O])(f: O => Effect): Reaction[O] = ???
+  def apply[O](o: Observe[O])(f: O => Effect): Reaction = ???
 }
