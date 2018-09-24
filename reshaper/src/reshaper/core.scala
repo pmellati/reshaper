@@ -13,11 +13,11 @@ object Observe {
   implicit val observeMonad: Monad[Observe] = ???
 
   implicit class ObserveSyntax[A](self: Observe[A]) {
-    def react(f: A => Effect): Reaction =
-      Reaction[A](self)(f)
+    def react(f: A => Effect): Reaction[A] =
+      Reaction[A](self, f)
 
-    def reactPartial(pf: PartialFunction[A, Effect]): Reaction =
-      Reaction[A](self.filter(pf.isDefinedAt))(pf)
+    def reactPartial(pf: PartialFunction[A, Effect]): Reaction[A] =
+      Reaction[A](self.filter(pf.isDefinedAt), pf)
 
     def filter(pred: A => Boolean): Observe[A] =
       self.flatMap { a =>
@@ -71,9 +71,4 @@ object Effect {
   def noOp: Effect = ???
 }
 
-
-sealed trait Reaction
-
-object Reaction {
-  def apply[O](o: Observe[O])(f: O => Effect): Reaction = ???
-}
+case class Reaction[O](observation: Observe[O], effect: O => Effect)

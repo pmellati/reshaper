@@ -15,8 +15,9 @@ object Machines {
   case class MachineIntent(machine: Machine)         extends Resource
   case class Machine(name: String, imageUrl: String) extends Resource
 
+  // TODO: How can we handle state better?
   object state {
-    case class UpdatingMachine(name: String) extends Resource
+    case class UpdatingMachine(machineName: String) extends Resource
   }
 
   val createMachine = (
@@ -33,35 +34,38 @@ object Machines {
     } yield machine
   ).react(delete)
 
-  // TODO: How can we handle state better?
-  // TODO: Is there a race condition in the state?
-
   val updateMachine = (
     for {
-      machine       <- each[Machine]
-      _             <- byId[MachineIntent](machine.name).filter(_.machine != machine)
-      updatingState <- getOpt[state.UpdatingMachine]
-    } yield (machine, updatingState)
-  ).reactPartial {
-    case (machine, None) =>
-      put(state.UpdatingMachine(machine.name))
+      machine <- each[Machine]
+      _       <- byId[MachineIntent](machine.name).filter(_.machine != machine)
+    } yield machine
+  )
+    .react(delete)
+    .withLock(machine => state.UpdatingMachine(machine.name))
 
-    case (machine, Some(state.UpdatingMachine(updatingMachineName))) if machine.name == updatingMachineName =>
-      delete(machine)
+  val releaseUpdatingMachineLock = (
+    for {
+      lock             <- get[state.UpdatingMachine]
+      machineIntentOpt <- byIdOpt[MachineIntent](lock.machineName)
+      machineOpt       <- byIdOpt[Machine](lock.machineName)
+    } yield (lock, machineIntentOpt, machineOpt)
+  ).reactPartial {
+    case (lock, None, _) =>
+      delete(lock)
+
+    case (lock, Some(MachineIntent(desired)), Some(current)) if desired == current =>
+      delete(lock)
   }
 
-  val clearUpdatingMachineState = (
-    for {
-      updatingMachineState <- get[state.UpdatingMachine]
-      machineName           = updatingMachineState.name
-      machineIntentOpt     <- byIdOpt[MachineIntent](machineName)
-      machineOpt           <- byIdOpt[Machine](machineName)
-    } yield (updatingMachineState, machineIntentOpt, machineOpt)
-  ).reactPartial {
-    case (updatingMachineState, None, _) =>
-      delete(updatingMachineState)
-
-    case (updatingMachineState, Some(mi), Some(m)) if mi.machine == m =>
-      delete(updatingMachineState)
+  implicit class ReactionWithLock[A](reaction: Reaction[A]) {
+    def withLock[B <: Resource](lock: A => B) = (
+      for {
+        o    <- reaction.observation
+        lock <- getOpt[B]
+      } yield (o, lock)
+    ).reactPartial {
+      case (o, Some(`lock`)) => reaction.effect(o)
+      case (o, None)         => put(lock(o))
+    }
   }
 }
