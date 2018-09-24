@@ -8,7 +8,7 @@ object Machines {
   case class Machine(id: String, imageUrl: String)       extends Resource
 
   /** Simpler version. Based on the assumption that putting a machine is idempotent. */
-  val createMachine = each[MachineIntent].react {mi => put(Machine(mi.id, mi.imageUrl))}
+  val createMachine = each[MachineIntent].react { mi => put(Machine(mi.id, mi.imageUrl)) }
 
   // TODO: Implement withFilter or generally filtering?
   val deleteMachine = (
