@@ -13,7 +13,9 @@ object reshaper extends ScalaModule { main =>
     "-Xfatal-warnings",
     "-deprecation",
     "-unchecked",
-    "-language:_"
+    "-language:_",
+    "-Ywarn-unused:_",
+    "-Xlint:nullary-override,nullary-unit,unsound-match,package-object-classes"
   )
 
   def scalacPluginIvyDeps = Agg(

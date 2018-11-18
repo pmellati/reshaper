@@ -1,8 +1,5 @@
 package reshaper.examples
 
-import cats.effect.IO
-import cats.implicits._
-
 import reshaper._, observe.Observe._, observe.Observer, Effect._
 
 /** What we want to say:
