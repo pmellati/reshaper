@@ -9,8 +9,9 @@ import fs2.Stream
 import reshaper.{Effect, Reaction}
 import Observe._
 
+// TODO: Should we just use Stream directly and get rid of Observe?
 // TODO: Use abstract effect type.
-class Observe[+A](stream: Stream[IO, A])
+class Observe[+A](val stream: Stream[IO, A])
 
 object Observe extends ObserveInstances with ToObserveOps {
   def pure[A](a: A): Observe[A] =
@@ -52,7 +53,19 @@ object Observe extends ObserveInstances with ToObserveOps {
 
 
 trait ObserveInstances {
-  implicit val observeMonad: Monad[Observe] = ???
+  implicit val observeMonad: Monad[Observe] = new Monad[Observe] {
+    override def flatMap[A, B](fa: Observe[A])(f: A => Observe[B]): Observe[B] =
+      new Observe(fa.stream.flatMap(a => f(a).stream))
+
+    // TODO: Is this a correct implementation?
+    override def tailRecM[A, B](a: A)(f: A => Observe[Either[A, B]]): Observe[B] =
+      new Observe(
+        Monad[Stream[IO, ?]].tailRecM[A, B](a) { a => f(a).stream }
+      )
+
+    override def pure[A](x: A): Observe[A] =
+      Observe.pure[A](x)
+  }
 }
 
 trait ToObserveOps {

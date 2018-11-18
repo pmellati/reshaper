@@ -16,6 +16,10 @@ object reshaper extends ScalaModule { main =>
     "-language:_"
   )
 
+  def scalacPluginIvyDeps = Agg(
+    ivy"org.spire-math::kind-projector:0.9.8"
+  )
+
   object test extends Tests {
     def ivyDeps =
       main.ivyDeps() ++
