@@ -1,41 +1,49 @@
 package reshaper.observe
 
-import cats.Monad
 import cats.implicits._
+import cats.effect.IO
+import cats.Monad
+
+import fs2.Stream
+
 import reshaper.{Effect, Reaction}
 import Observe._
 
-sealed trait Observe[+A]
+// TODO: Use abstract effect type.
+class Observe[+A](stream: Stream[IO, A])
 
 object Observe extends ObserveInstances with ToObserveOps {
-  def pure[A](a: A): Observe[A] = ???
-  val cancel: Observe[Nothing] = ???
+  def pure[A](a: A): Observe[A] =
+    new Observe(Stream.emit(a))
 
-  def each[A]: Observe[A] = ???
+  val cancel: Observe[Nothing] =
+    new Observe(Stream.empty)
 
-  def all[A]: Observe[Set[A]] = ???
+  def each[A](implicit observerA: Observer[IO, A]): Observe[A] =
+    new Observe(observerA.fetchAll)
 
-  def byIdOpt[A](id: String): Observe[Option[A]] = ???
+  def all[A](implicit observerA: Observer[IO, A]): Observe[Vector[A]] = {
+    val as: IO[Vector[A]] = observerA.fetchAll.compile.toVector
+    new Observe(Stream.eval(as))
+  }
 
-  // TODO: What the hell is this?
-  def get[A]: Observe[A] =
-    all[A].filter(_.size == 1).map(_.head)
+  def byIdOpt[A](id: String)(implicit observerA: Observer[IO, A]): Observe[Option[A]] = {
+    val ioOptA: IO[Option[A]] = observerA.fetchById(id).map(_.toOption)
+    new Observe(Stream.eval(ioOptA))
+  }
 
-  def getOpt[A]: Observe[Option[A]] =
-    all[A].filter(_.size <= 1).map(_.headOption)
-
-  def noneFound[A]: Observe[Unit] =
+  def noneFound[A](implicit obsA: Observer[IO, A]): Observe[Unit] =
     all[A].filter(_.isEmpty).void
 
   val unit: Observe[Unit] = pure[Unit](())
 
-  def byId[A](id: String): Observe[A] =
+  def byId[A](id: String)(implicit obsA: Observer[IO, A]): Observe[A] =
     byIdOpt[A](id).flatMap {
       case Some(a) => pure(a)
       case None    => cancel
     }
 
-  def byIdNotFound[A](id: String): Observe[Unit] =
+  def byIdNotFound[A](id: String)(implicit obsA: Observer[IO, A]): Observe[Unit] =
     byIdOpt[A](id).filter(_.isEmpty).void
 
   def continueIf(cond: Boolean): Observe[Unit] =

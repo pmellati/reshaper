@@ -1,7 +1,9 @@
 package reshaper.examples
 
+import cats.effect.IO
 import cats.implicits._
-import reshaper._, observe.Observe._, Effect._
+
+import reshaper._, observe.Observe._, observe.Observer, Effect._
 
 /** What we want to say:
   *
@@ -19,6 +21,13 @@ object Machines {
   object state {
     case class UpdatingMachine(machineName: String) extends Resource
   }
+
+  implicit val machineIntentObserver: Observer[IO, MachineIntent] = ???
+
+  implicit val machineObserver: Observer[IO, Machine] = ???
+
+  implicit val updatingMachineStateObserver: Observer[IO, state.UpdatingMachine] = ???
+
 
   val createMachine = (
     for {
@@ -41,11 +50,11 @@ object Machines {
     } yield machine
   )
     .react(delete)
-    .withLock(machine => state.UpdatingMachine(machine.name))
+    .withLock(machine => "updatingMachine" -> state.UpdatingMachine(machine.name))
 
   val releaseUpdatingMachineLock = (
     for {
-      lock             <- get[state.UpdatingMachine]
+      lock             <- byId[state.UpdatingMachine]("updatingMachine")
       machineIntentOpt <- byIdOpt[MachineIntent](lock.machineName)
       machineOpt       <- byIdOpt[Machine](lock.machineName)
     } yield (lock, machineIntentOpt, machineOpt)
@@ -57,15 +66,18 @@ object Machines {
       delete(lock)
   }
 
+  // TODO: Really ugly. Fix later.
   implicit class ReactionWithLock[A](reaction: Reaction[A]) {
-    def withLock[B <: Resource](lock: A => B) = (
+    def withLock[B <: Resource](getLock: A => (String, B))(implicit obsB: Observer[IO, B]) = (
       for {
-        o    <- reaction.observation
-        lock <- getOpt[B]
-      } yield (o, lock)
+        o           <- reaction.observation
+        lockWithId   = getLock(o)
+        (lockId, _)  = lockWithId
+        fetchedLock <- byIdOpt[B](lockId)
+      } yield (o, fetchedLock)
     ).reactPartial {
-      case (o, Some(`lock`)) => reaction.effect(o)
-      case (o, None)         => put(lock(o))
+      case (o, Some(lock)) if lock == getLock(o)._2 => reaction.effect(o)
+      case (o, None)                                => put(getLock(o)._2)
     }
   }
 }
