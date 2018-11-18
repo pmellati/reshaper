@@ -5,11 +5,15 @@ object reshaper extends ScalaModule { main =>
   def scalaVersion = "2.12.6"
 
   def ivyDeps = Agg(
-    ivy"org.typelevel::cats-effect:1.0.0"
+    ivy"co.fs2::fs2-core:1.0.0"
   )
 
   def scalacOptions = Seq(
-    "-Ypartial-unification"    // Needed by cats-core.
+    "-Ypartial-unification",   // Needed by cats-core.
+    "-Xfatal-warnings",
+    "-deprecation",
+    "-unchecked",
+    "-language:_"
   )
 
   object test extends Tests {
