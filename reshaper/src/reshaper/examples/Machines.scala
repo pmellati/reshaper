@@ -22,11 +22,11 @@ object Machines {
     case class UpdatingMachine(machineName: String) extends Resource
   }
 
-  implicit val machineIntentObserver: Observer[IO, MachineIntent] = ???
+  implicit val machineIntentObserver: Observer[MachineIntent] = ???
 
-  implicit val machineObserver: Observer[IO, Machine] = ???
+  implicit val machineObserver: Observer[Machine] = ???
 
-  implicit val updatingMachineStateObserver: Observer[IO, state.UpdatingMachine] = ???
+  implicit val updatingMachineStateObserver: Observer[state.UpdatingMachine] = ???
 
 
   val createMachine = (
@@ -68,7 +68,7 @@ object Machines {
 
   // TODO: Really ugly. Fix later.
   implicit class ReactionWithLock[A](reaction: Reaction[A]) {
-    def withLock[B <: Resource](getLock: A => (String, B))(implicit obsB: Observer[IO, B]) = (
+    def withLock[B <: Resource](getLock: A => (String, B))(implicit obsB: Observer[B]) = (
       for {
         o           <- reaction.observation
         lockWithId   = getLock(o)
